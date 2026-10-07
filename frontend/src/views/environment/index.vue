@@ -65,7 +65,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 
-import { request } from '@/api/client'
+import { openExport, request } from '@/api/client'
 
 type Row = Record<string, string | number | null>
 
@@ -87,7 +87,8 @@ function resetFilters() {
 }
 
 function exportRows() {
-  window.open(`${ENDPOINT}/export`, '_blank')
+  // 与列表 reload 用同一份过滤条件，导出的条数即列表 total。
+  openExport(ENDPOINT, Object.keys(filters.value).length ? filters.value : undefined)
 }
 
 function openCreate() {

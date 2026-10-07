@@ -19,3 +19,13 @@ export async function fetchJson<T>(path: string): Promise<T> {
   }
   return (await response.json()) as T
 }
+
+/**
+ * 统一导出入口：所有模块共用的下载通道。
+ * 带上与列表查询相同的过滤参数，保证导出文件与列表读到的是同一批数据；
+ * 后端按同一模块 + 同一范围落盘，重复导出只覆盖同名文件。
+ */
+export function openExport(endpoint: string, filters?: Record<string, string>): void {
+  const query = filters ? new URLSearchParams(filters).toString() : ''
+  window.open(`${endpoint}/export${query ? `?${query}` : ''}`, '_blank')
+}

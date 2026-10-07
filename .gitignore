@@ -85,3 +85,6 @@ desktop.ini
 *.db
 *.pid
 *.seed
+
+# ===== 导出落盘文件（本地运行期产物，重复导出只覆盖） =====
+backend/var/

@@ -74,3 +74,32 @@ npm run dev
   `backend/app/routers/<模块>.py`，业务规则在 `backend/app/services/<模块>.py`。
 - 列表接口统一返回 `{ items, total, page, size }`，动作接口统一返回 `{ ok, message }`。
 - 状态流转只允许在 `app/services` 里改，路由层不做业务判断。
+
+## 统一导出
+
+各模块不再各自实现导出：字段口径（取哪些字段、列顺序、空值占位）、取数范围
+（关键字、状态）统一维护在 `backend/app/modules/`：
+
+- `app/modules/specs.py`：每个模块唯一的字段/状态/动作口径注册表，是字段顺序与
+  空值占位的唯一维护点。存量字段已按收拢前的 services / routers / 前端页面三处
+  定义逐模块核对合并（凭据见 `backend/tests/expected_specs.json`）。
+- `app/modules/base.py`：通用 service，`query_rows` 是列表与导出唯一共用的取数通道。
+- `app/modules/exporting.py`：统一导出，负责字段投影、空值占位（`—`）、落盘覆盖。
+- `app/modules/router.py`：按注册表为每个模块生成路由，`app/services`、`app/routers`
+  下的模块文件只保留薄壳，兼容历史 import 路径。
+
+行为约定：
+
+- **同一份数据**：导出与列表走同一个 `query_rows`，支持与列表相同的 `keyword`、
+  `status` 过滤；导出条数恒等于列表 `total`（通道内置自检，结果里带 `matched`）。
+- **入口不变**：`GET /api/<模块>/export` 原样保留，响应里 `module/total/items`
+  键不变；默认 JSON，加 `fmt=csv` 下载带 BOM 的 CSV。前端仍是原按钮，
+  统一走 `openExport(endpoint, filters)`，并带上当前列表过滤条件。
+- **列顺序与空值不变**：投影列顺序按注册表，缺值（None/空串/空白）统一补 `—`；
+  行里多余字段不进导出、缺失字段补占位，原始数据不被修改。
+- **覆盖不追加**：同一模块 + 同一范围固定写同一文件（全量为 `<模块>.all.json`），
+  重复导出只覆盖。落盘目录默认 `backend/var/exports/`，可用 `EXPORT_DIR` 覆盖。
+- **全量导出与失败定位**：`GET /api/exports`（可选 `modules=a,b&fmt=csv`）一次导出
+  全部模块，单个模块失败会被隔离并在 `failures` 里给出模块名与原因。
+  也可用脚本自检：`.venv/bin/python -m scripts.export_all`。
+

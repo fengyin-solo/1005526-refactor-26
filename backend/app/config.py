@@ -1,7 +1,9 @@
 """运行配置：端口、跨域、运行环境。"""
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
+from pathlib import Path
 
 
 @dataclass(frozen=True)
@@ -17,6 +19,12 @@ class Settings:
     )
     page_size_default: int = 20
     page_size_max: int = 200
+    # 导出文件落盘目录：同一范围重复导出覆盖同名文件。可用 EXPORT_DIR 覆盖。
+    export_dir: str = field(
+        default_factory=lambda: os.environ.get(
+            "EXPORT_DIR", str(Path(__file__).resolve().parent.parent / "var" / "exports")
+        )
+    )
 
 
 settings = Settings()
