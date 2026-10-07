@@ -1,20 +1,18 @@
 """检修计划接口：维护检修计划，覆盖提交审批、开始执行、确认完工等动作。"""
 from __future__ import annotations
 
-from typing import Any
-
 from fastapi import APIRouter, HTTPException, Query
 
 from app.schemas import ActionResult, EntryPayload, PageResult
+from app.exporting import register_service
+from app.exporting.routes import build_export_router
 from app.services.maintenance import MaintenanceService
 
+MODULE_NAME = "maintenance"
 router = APIRouter(prefix="/api/maintenance", tags=["检修计划"])
 
 service = MaintenanceService()
-
-LIST_FIELDS = ["计划编号", "检修设备", "检修类别", "计划开始", "计划结束", "责任人", "安全措施", "计划状态"]
-STATUSES = ["待审批", "已批复", "执行中", "已完工"]
-
+register_service(MODULE_NAME, service)
 
 @router.get("", response_model=PageResult[dict])
 def list_entries(
@@ -29,6 +27,9 @@ def list_entries(
     items, total = service.list_entries(keyword=keyword, status=status, page=page, size=size)
     return PageResult(items=items, total=total, page=page, size=size)
 
+
+# 必须在 /{entry_id} 之前挂载，否则 /export 会被当成 entry_id。
+router.include_router(build_export_router(MODULE_NAME))
 
 @router.get("/{entry_id}", response_model=dict)
 def get_entry(entry_id: int) -> dict:
@@ -58,8 +59,3 @@ def run_action(entry_id: int, payload: EntryPayload) -> ActionResult:
     return ActionResult(ok=True, message=message, entry=entry)
 
 
-@router.get("/export")
-def export_entries() -> dict[str, Any]:
-    """导出检修计划清单：返回当前过滤条件下的全量数据。"""
-    items, total = service.list_entries(page=1, size=10000)
-    return {"module": "maintenance", "total": total, "items": items}

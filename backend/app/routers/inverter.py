@@ -1,20 +1,18 @@
 """逆变器监视接口：维护逆变器，覆盖恢复运行、降容保护、安排检修等动作。"""
 from __future__ import annotations
 
-from typing import Any
-
 from fastapi import APIRouter, HTTPException, Query
 
 from app.schemas import ActionResult, EntryPayload, PageResult
+from app.exporting import register_service
+from app.exporting.routes import build_export_router
 from app.services.inverter import InverterService
 
+MODULE_NAME = "inverter"
 router = APIRouter(prefix="/api/inverter", tags=["逆变器监视"])
 
 service = InverterService()
-
-LIST_FIELDS = ["逆变器编号", "品牌型号", "额定功率", "输入电压范围", "所属阵列", "运行温度", "日均发电量", "运行状态"]
-STATUSES = ["正常运行", "降容运行", "高温报警", "待检修"]
-
+register_service(MODULE_NAME, service)
 
 @router.get("", response_model=PageResult[dict])
 def list_entries(
@@ -29,6 +27,9 @@ def list_entries(
     items, total = service.list_entries(keyword=keyword, status=status, page=page, size=size)
     return PageResult(items=items, total=total, page=page, size=size)
 
+
+# 必须在 /{entry_id} 之前挂载，否则 /export 会被当成 entry_id。
+router.include_router(build_export_router(MODULE_NAME))
 
 @router.get("/{entry_id}", response_model=dict)
 def get_entry(entry_id: int) -> dict:
@@ -58,8 +59,3 @@ def run_action(entry_id: int, payload: EntryPayload) -> ActionResult:
     return ActionResult(ok=True, message=message, entry=entry)
 
 
-@router.get("/export")
-def export_entries() -> dict[str, Any]:
-    """导出逆变器监视清单：返回当前过滤条件下的全量数据。"""
-    items, total = service.list_entries(page=1, size=10000)
-    return {"module": "inverter", "total": total, "items": items}

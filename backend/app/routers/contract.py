@@ -1,20 +1,18 @@
 """运维合同接口：维护运维合同，覆盖确认签订、开始履行、终止合同等动作。"""
 from __future__ import annotations
 
-from typing import Any
-
 from fastapi import APIRouter, HTTPException, Query
 
 from app.schemas import ActionResult, EntryPayload, PageResult
+from app.exporting import register_service
+from app.exporting.routes import build_export_router
 from app.services.contract import ContractService
 
+MODULE_NAME = "contract"
 router = APIRouter(prefix="/api/contract", tags=["运维合同"])
 
 service = ContractService()
-
-LIST_FIELDS = ["合同编号", "合同名称", "签约甲方", "签约乙方", "合同金额", "起止日期", "续签条款", "合同状态"]
-STATUSES = ["草稿中", "已签订", "履行中", "已到期", "已终止"]
-
+register_service(MODULE_NAME, service)
 
 @router.get("", response_model=PageResult[dict])
 def list_entries(
@@ -29,6 +27,9 @@ def list_entries(
     items, total = service.list_entries(keyword=keyword, status=status, page=page, size=size)
     return PageResult(items=items, total=total, page=page, size=size)
 
+
+# 必须在 /{entry_id} 之前挂载，否则 /export 会被当成 entry_id。
+router.include_router(build_export_router(MODULE_NAME))
 
 @router.get("/{entry_id}", response_model=dict)
 def get_entry(entry_id: int) -> dict:
@@ -58,8 +59,3 @@ def run_action(entry_id: int, payload: EntryPayload) -> ActionResult:
     return ActionResult(ok=True, message=message, entry=entry)
 
 
-@router.get("/export")
-def export_entries() -> dict[str, Any]:
-    """导出运维合同清单：返回当前过滤条件下的全量数据。"""
-    items, total = service.list_entries(page=1, size=10000)
-    return {"module": "contract", "total": total, "items": items}

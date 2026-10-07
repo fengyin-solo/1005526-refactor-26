@@ -1,20 +1,18 @@
 """巡视检查接口：维护巡视记录，覆盖开始巡视、提交记录、归档记录等动作。"""
 from __future__ import annotations
 
-from typing import Any
-
 from fastapi import APIRouter, HTTPException, Query
 
 from app.schemas import ActionResult, EntryPayload, PageResult
+from app.exporting import register_service
+from app.exporting.routes import build_export_router
 from app.services.patrol import PatrolService
 
+MODULE_NAME = "patrol"
 router = APIRouter(prefix="/api/patrol", tags=["巡视检查"])
 
 service = PatrolService()
-
-LIST_FIELDS = ["记录编号", "巡视区域", "巡视日期", "巡视人员", "发现缺陷数", "红外测温结果", "接线端子温度", "巡视状态"]
-STATUSES = ["待巡视", "巡视中", "已记录", "已归档"]
-
+register_service(MODULE_NAME, service)
 
 @router.get("", response_model=PageResult[dict])
 def list_entries(
@@ -29,6 +27,9 @@ def list_entries(
     items, total = service.list_entries(keyword=keyword, status=status, page=page, size=size)
     return PageResult(items=items, total=total, page=page, size=size)
 
+
+# 必须在 /{entry_id} 之前挂载，否则 /export 会被当成 entry_id。
+router.include_router(build_export_router(MODULE_NAME))
 
 @router.get("/{entry_id}", response_model=dict)
 def get_entry(entry_id: int) -> dict:
@@ -58,8 +59,3 @@ def run_action(entry_id: int, payload: EntryPayload) -> ActionResult:
     return ActionResult(ok=True, message=message, entry=entry)
 
 
-@router.get("/export")
-def export_entries() -> dict[str, Any]:
-    """导出巡视检查清单：返回当前过滤条件下的全量数据。"""
-    items, total = service.list_entries(page=1, size=10000)
-    return {"module": "patrol", "total": total, "items": items}

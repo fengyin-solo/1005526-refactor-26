@@ -1,20 +1,18 @@
 """储能电池组接口：维护储能电池组，覆盖启动充电、启动放电、切换到待机等动作。"""
 from __future__ import annotations
 
-from typing import Any
-
 from fastapi import APIRouter, HTTPException, Query
 
 from app.schemas import ActionResult, EntryPayload, PageResult
+from app.exporting import register_service
+from app.exporting.routes import build_export_router
 from app.services.energy_storage import EnergyStorageService
 
+MODULE_NAME = "energy_storage"
 router = APIRouter(prefix="/api/energy_storage", tags=["储能电池组"])
 
 service = EnergyStorageService()
-
-LIST_FIELDS = ["电池组编号", "电池类型", "额定容量", "SOC上限", "充放电循环", "电池温度", "内阻变化率", "运行状态"]
-STATUSES = ["充电中", "放电中", "待机", "故障停机"]
-
+register_service(MODULE_NAME, service)
 
 @router.get("", response_model=PageResult[dict])
 def list_entries(
@@ -29,6 +27,9 @@ def list_entries(
     items, total = service.list_entries(keyword=keyword, status=status, page=page, size=size)
     return PageResult(items=items, total=total, page=page, size=size)
 
+
+# 必须在 /{entry_id} 之前挂载，否则 /export 会被当成 entry_id。
+router.include_router(build_export_router(MODULE_NAME))
 
 @router.get("/{entry_id}", response_model=dict)
 def get_entry(entry_id: int) -> dict:
@@ -58,8 +59,3 @@ def run_action(entry_id: int, payload: EntryPayload) -> ActionResult:
     return ActionResult(ok=True, message=message, entry=entry)
 
 
-@router.get("/export")
-def export_entries() -> dict[str, Any]:
-    """导出储能电池组清单：返回当前过滤条件下的全量数据。"""
-    items, total = service.list_entries(page=1, size=10000)
-    return {"module": "energy_storage", "total": total, "items": items}

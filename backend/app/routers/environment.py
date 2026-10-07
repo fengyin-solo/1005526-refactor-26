@@ -1,20 +1,18 @@
 """环境监测站接口：维护环境监测站，覆盖恢复正常、标记异常、停用站点等动作。"""
 from __future__ import annotations
 
-from typing import Any
-
 from fastapi import APIRouter, HTTPException, Query
 
 from app.schemas import ActionResult, EntryPayload, PageResult
+from app.exporting import register_service
+from app.exporting.routes import build_export_router
 from app.services.environment import EnvironmentService
 
+MODULE_NAME = "environment"
 router = APIRouter(prefix="/api/environment", tags=["环境监测站"])
 
 service = EnvironmentService()
-
-LIST_FIELDS = ["站点编号", "安装位置", "辐照度", "环境温度", "风速", "风向", "积灰比", "通讯状态"]
-STATUSES = ["数据正常", "数据异常", "传感器故障", "已停用"]
-
+register_service(MODULE_NAME, service)
 
 @router.get("", response_model=PageResult[dict])
 def list_entries(
@@ -29,6 +27,9 @@ def list_entries(
     items, total = service.list_entries(keyword=keyword, status=status, page=page, size=size)
     return PageResult(items=items, total=total, page=page, size=size)
 
+
+# 必须在 /{entry_id} 之前挂载，否则 /export 会被当成 entry_id。
+router.include_router(build_export_router(MODULE_NAME))
 
 @router.get("/{entry_id}", response_model=dict)
 def get_entry(entry_id: int) -> dict:
@@ -58,8 +59,3 @@ def run_action(entry_id: int, payload: EntryPayload) -> ActionResult:
     return ActionResult(ok=True, message=message, entry=entry)
 
 
-@router.get("/export")
-def export_entries() -> dict[str, Any]:
-    """导出环境监测站清单：返回当前过滤条件下的全量数据。"""
-    items, total = service.list_entries(page=1, size=10000)
-    return {"module": "environment", "total": total, "items": items}

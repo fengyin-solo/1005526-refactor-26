@@ -74,3 +74,30 @@ npm run dev
   `backend/app/routers/<模块>.py`，业务规则在 `backend/app/services/<模块>.py`。
 - 列表接口统一返回 `{ items, total, page, size }`，动作接口统一返回 `{ ok, message }`。
 - 状态流转只允许在 `app/services` 里改，路由层不做业务判断。
+
+## 统一导出通道
+
+所有模块的导出都收拢在 `backend/app/exporting/`，各模块不再各写一份：
+
+| 文件 | 职责 |
+| --- | --- |
+| `app/exporting/registry.py` | 字段口径唯一来源：每个模块的列顺序、关键字列、状态枚举 |
+| `app/exporting/pipeline.py` | 公共通道：复用各模块 `service.list_entries` 取数 → 按口径投影 → CSV 落盘 |
+| `app/exporting/writer.py` | 列投影与 CSV 渲染，空值统一占位 `—`（与列表一致），带 UTF-8 BOM |
+| `app/exporting/routes.py` | 导出端点工厂，各模块 `/api/<模块>/export` 都由它生成 |
+| `app/exporting/runner.py` | 全量导出编排，逐模块报告成败，单模块故障不影响其它模块 |
+
+约定：
+
+- 下载入口不变：仍是 `GET /api/<模块>/export`，前端按钮无需改动。
+- 导出与列表读同一份数据：同一套 `keyword/status` 参数、同一个 `list_entries`，
+  导出条数必然等于列表 `total`；分页导出（`?page=&size=`）与全量导出走同一函数，
+  分页不落盘，全量才写文件。
+- 字段顺序与空值占位以 `registry.py` 为准（来自切换前各模块清单，已逐模块核对），
+  新增列只能追加在末尾；`?format=json` 保留老的 `{module,total,items}` 响应。
+- 全量导出固定写入 `backend/exports/export_<模块>.csv`，重复导出只覆盖不追加；
+  带过滤条件的导出写入带范围指纹的独立文件，不会冲掉全量文件。
+- 一键全量导出：`POST /api/exports/run`（可带 `?only=a,b` 只跑部分模块），
+  返回逐模块的 `ok/total/path/error` 与失败堆栈，起服务后可直接验证是哪个模块坏了。
+
+测试：`make backend-test`（或 `cd backend && .venv/bin/python -m unittest discover -s tests`）。

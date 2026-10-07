@@ -1,0 +1,5 @@
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pydantic>=2.6
+# 仅测试用：Starlette 的 TestClient 依赖 httpx
+httpx>=0.27
